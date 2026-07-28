@@ -4,6 +4,9 @@ env/
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.coverage
+htmlcov/
 
 .env
 .env.*
@@ -16,6 +19,27 @@ outputs/
 results/
 temp/
 tmp/
+*.log
 
 .DS_Store
 Thumbs.db
+
+# DataVeil privacy-sensitive runtime artifacts.
+# Existing tracked legacy samples are intentionally preserved, but new files
+# under TestFolder and future local runtime folders must not be committed.
+DocMasker/TestFolder/
+DocMasker/uploads/
+DocMasker/runtime/
+DocMasker/local_data/
+*_value_mask_map.txt
+*_placeholder_mapping.json
+*_document_db.ndjson
+
+# ImageMasker CLI/runtime output and user-held recovery artifacts.
+ImageMasker/out/
+ImageMasker/out_*/
+ImageMasker/runtime/
+ImageMasker/uploads/
+dataveil-*-recovery.json
+dataveil-masked.*
+dataveil-restored.*

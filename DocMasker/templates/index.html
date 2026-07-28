@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>DataVeil DocMasker</title>
+  <link rel="stylesheet" href="{{ url_for('docmasker_static', path='/dataveil-docmasker-v1.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <nav class="workspace-nav" aria-label="DataVeil navigation">
+      <a class="back-link" href="/">← DataVeil home</a>
+      <span class="privacy-badge"><span class="privacy-dot"></span>Local only</span>
+    </nav>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Text &amp; document privacy</p>
+        <h1>DataVeil <span>DocMasker</span></h1>
+        <p class="lede">
+          Detect private details, decide exactly what to conceal, and keep a
+          local recovery mapping for your post-AI text.
+        </p>
+      </div>
+    </header>
+
+    <div class="workflow-tabs" role="tablist" aria-label="DocMasker workflow">
+      <button class="workflow-tab active" data-view="protect" type="button">Protect text</button>
+      <button class="workflow-tab" data-view="restore" type="button">Restore after AI</button>
+    </div>
+
+    <section id="protect-view" class="workflow-view">
+      <section class="panel input-panel" aria-labelledby="input-heading">
+        <div class="panel-heading">
+          <div>
+            <p class="step">01</p>
+            <h2 id="input-heading">Add your content</h2>
+          </div>
+          <span id="char-count" class="char-count">0 / {{ max_text_length }}</span>
+        </div>
+
+        <div class="input-tabs" role="tablist" aria-label="Input type">
+          <button class="input-tab active" data-input="text" type="button">Paste text</button>
+          <button class="input-tab" data-input="file" type="button">Upload document</button>
+        </div>
+
+        <div id="text-input-pane">
+          <label class="sr-only" for="source-text">Text to inspect</label>
+          <textarea
+            id="source-text"
+            maxlength="{{ max_text_length }}"
+            placeholder="Paste text containing names, email addresses, phone numbers, locations, dates, IDs, or other private details…"
+            spellcheck="false"
+          ></textarea>
+        </div>
+
+        <div id="file-input-pane" hidden>
+          <label class="upload-zone" for="document-file">
+            <span class="upload-icon">↑</span>
+            <strong>Choose a document</strong>
+            <span>PDF, DOCX, or PPTX · up to 15 MB</span>
+            <input id="document-file" type="file" accept=".pdf,.docx,.pptx">
+          </label>
+          <p id="document-name" class="file-name">No document selected</p>
+        </div>
+
+        <div class="button-row">
+          <button id="scan-button" class="button primary" type="button">
+            <span class="button-label">Scan private data</span>
+            <span class="spinner" aria-hidden="true"></span>
+          </button>
+          <button id="clear-button" class="button secondary" type="button">Clear</button>
+        </div>
+        <p id="error-message" class="message error" role="alert" hidden></p>
+      </section>
+
+      <section id="review-section" class="review-grid" hidden>
+        <div class="panel review-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="step">02</p>
+              <h2>Choose what to mask</h2>
+            </div>
+            <span id="detection-total" class="total-pill">0 found</span>
+          </div>
+
+          <div class="review-actions">
+            <button id="select-all-button" class="text-button" type="button">Select all</button>
+            <button id="select-none-button" class="text-button" type="button">Select none</button>
+          </div>
+          <div id="entity-list" class="entity-list"></div>
+        </div>
+
+        <div class="panel settings-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="step">03</p>
+              <h2>Masking style</h2>
+            </div>
+          </div>
+          <label class="field-label" for="masking-type">Replacement type</label>
+          <select id="masking-type">
+            <option value="placeholder">Reversible placeholders</option>
+            <option value="redact">Typed redaction tokens</option>
+            <option value="pseudonym">Readable pseudonyms</option>
+            <option value="generalize">Generalized categories</option>
+            <option value="remove">Remove values</option>
+          </select>
+          <p id="style-note" class="field-note">
+            Best for recovery after AI editing. Keep tokens unchanged.
+          </p>
+          <button id="mask-button" class="button primary full-button" type="button">
+            Mask selected details
+          </button>
+        </div>
+      </section>
+
+      <section id="result-section" class="panel result-panel" hidden>
+        <div class="panel-heading">
+          <div>
+            <p class="step">04</p>
+            <h2>Protected output</h2>
+          </div>
+          <span id="masked-total" class="total-pill">0 masked</span>
+        </div>
+        <label class="sr-only" for="masked-text">Masked text</label>
+        <textarea id="masked-text" readonly></textarea>
+        <div class="button-row download-row">
+          <button id="copy-button" class="button secondary" type="button">Copy text</button>
+          <button id="download-text-button" class="button secondary" type="button">Download .txt</button>
+          <button id="download-mapping-button" class="button primary" type="button">Download recovery file</button>
+        </div>
+        <p class="recovery-callout">
+          Keep the recovery file private. Do not upload it to your GenAI tool.
+        </p>
+        <p id="status-message" class="message success" role="status" hidden></p>
+      </section>
+    </section>
+
+    <section id="restore-view" class="workflow-view" hidden>
+      <div class="restore-layout">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="step">01</p>
+              <h2>Add AI-edited text</h2>
+            </div>
+          </div>
+          <textarea id="restore-source" class="compact-textarea" placeholder="Paste the AI-edited text while DataVeil tokens are still present."></textarea>
+        </section>
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="step">02</p>
+              <h2>Add recovery file</h2>
+            </div>
+          </div>
+          <label class="upload-zone compact-upload" for="mapping-file">
+            <span class="upload-icon">↑</span>
+            <strong>Choose recovery JSON</strong>
+            <span>Created when you protected the text</span>
+            <input id="mapping-file" type="file" accept=".json,.dataveil-text.json,application/json">
+          </label>
+          <p id="mapping-name" class="file-name">No recovery file selected</p>
+        </section>
+      </div>
+      <button id="restore-button" class="button primary restore-button" type="button">Restore private values</button>
+      <p id="restore-error" class="message error" role="alert" hidden></p>
+
+      <section id="restore-result-section" class="panel result-panel" hidden>
+        <div class="panel-heading">
+          <div>
+            <p class="step">03</p>
+            <h2>Restored text</h2>
+          </div>
+        </div>
+        <textarea id="restored-text" readonly></textarea>
+        <div class="button-row">
+          <button id="download-restored-button" class="button primary" type="button">Download restored .txt</button>
+        </div>
+      </section>
+    </section>
+
+    <footer>
+      <p>
+        DataVeil does not save documents, text, or mappings. Automated
+        detection can miss contextual clues—review every selection.
+      </p>
+    </footer>
+  </main>
+  <script src="{{ url_for('docmasker_static', path='/dataveil-docmasker.js') }}" defer></script>
+</body>
+</html>

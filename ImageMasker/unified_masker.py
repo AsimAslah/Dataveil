@@ -28,15 +28,16 @@ Example:
 import os
 import argparse
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, List, Dict, Optional, Tuple
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
-
-# InsightFace
-from insightface.app import FaceAnalysis
 import json
+
+if TYPE_CHECKING:
+    from insightface.app import FaceAnalysis
+    from ultralytics import YOLO
 
 
 # ---------------------------
@@ -171,9 +172,20 @@ def parse_person_choice(choice: str, people: List[PersonInstance]) -> Optional[P
 # YOLO: person instance segmentation
 # ---------------------------
 
-def yolo_person_instances(model: YOLO, image_bgr: np.ndarray, conf: float = 0.4) -> List[PersonInstance]:
+def yolo_person_instances(
+    model: Any,
+    image_bgr: np.ndarray,
+    conf: float = 0.4,
+    device: str | None = None,
+) -> List[PersonInstance]:
     H, W = image_bgr.shape[:2]
-    results = model.predict(image_bgr, conf=conf, verbose=False)
+    predict_options: dict[str, object] = {
+        "conf": conf,
+        "verbose": False,
+    }
+    if device is not None:
+        predict_options["device"] = device
+    results = model.predict(image_bgr, **predict_options)
 
     if not results or results[0] is None:
         return []
@@ -240,7 +252,7 @@ def landmarks_to_mask(landmarks: np.ndarray, h: int, w: int, expand: float = 1.1
     return mask
 
 
-def init_face_app(prefer_gpu: bool = True) -> FaceAnalysis:
+def init_face_app(prefer_gpu: bool = True) -> Any:
     """
     Attempts GPU if available, else CPU.
     """
@@ -250,13 +262,36 @@ def init_face_app(prefer_gpu: bool = True) -> FaceAnalysis:
     else:
         providers = ["CPUExecutionProvider"]
 
-    app = FaceAnalysis(name="buffalo_l", providers=providers)
+    from insightface.app import FaceAnalysis
+
+    insightface_root = Path(
+        os.environ.get(
+            "INSIGHTFACE_HOME",
+            str(Path.home() / ".insightface"),
+        )
+    ).expanduser()
+    local_model = insightface_root / "models" / "buffalo_l"
+    if not local_model.is_dir():
+        raise RuntimeError(
+            "The optional InsightFace buffalo_l model is not installed "
+            "locally. DataVeil will not download it automatically."
+        )
+
+    app = FaceAnalysis(
+        name="buffalo_l",
+        root=str(insightface_root),
+        providers=providers,
+    )
     # det_size can affect speed/quality; 1024 is decent for mid/high-res images
     app.prepare(ctx_id=0 if prefer_gpu else -1, det_size=(1024, 1024))
     return app
 
 
-def detect_faces_insightface(app: FaceAnalysis, image_bgr: np.ndarray, expand: float = 1.15) -> List[FaceInstance]:
+def detect_faces_insightface(
+    app: Any,
+    image_bgr: np.ndarray,
+    expand: float = 1.15,
+) -> List[FaceInstance]:
     H, W = image_bgr.shape[:2]
     faces = app.get(image_bgr)
     out: List[FaceInstance] = []
@@ -328,7 +363,13 @@ def combine_masks(masks: List[np.ndarray]) -> np.ndarray:
     return out
 
 
-def apply_effect(image_bgr: np.ndarray, mask_u8: np.ndarray, effect: str = "blur") -> np.ndarray:
+def apply_effect(
+    image_bgr: np.ndarray,
+    mask_u8: np.ndarray,
+    effect: str = "blur",
+    strength: int = 65,
+    color: str = "#101815",
+) -> np.ndarray:
     """
     Applies masking effect on pixels where mask is 255.
     effect: blur | pixelate | black
@@ -336,28 +377,90 @@ def apply_effect(image_bgr: np.ndarray, mask_u8: np.ndarray, effect: str = "blur
     if mask_u8.ndim != 2:
         raise ValueError("mask_u8 must be HxW uint8")
 
+    strength = max(1, min(100, int(strength)))
     out = image_bgr.copy()
     m = mask_u8.astype(bool)
 
-    if effect == "black":
-        out[m] = (0, 0, 0)
+    if effect in {"black", "silhouette"}:
+        opacity = strength / 100.0
+        dark = np.zeros_like(out)
+        blended = cv2.addWeighted(out, 1.0 - opacity, dark, opacity, 0)
+        out[m] = blended[m]
         return out
 
-    if effect == "pixelate":
-        # pixelate by downscaling masked region and upscaling
+    if effect in {"pixelate", "mosaic"}:
         H, W = out.shape[:2]
-        # choose a pixelation scale relative to image size
-        small_w = max(16, W // 40)
-        small_h = max(16, H // 40)
+        divisor = 3 + int(strength * 0.75)
+        if effect == "mosaic":
+            divisor = 5 + int(strength * 1.1)
+        small_w = max(3, W // max(3, divisor))
+        small_h = max(3, H // max(3, divisor))
         small = cv2.resize(out, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
         pix = cv2.resize(small, (W, H), interpolation=cv2.INTER_NEAREST)
+        if effect == "mosaic":
+            pix = (pix // 32) * 32
         out[m] = pix[m]
         return out
 
-    # default: blur
-    # big-ish blur kernel; must be odd
-    blur_strength = 3
-    k = max(15, ((min(out.shape[0], out.shape[1]) // 40)* blur_strength) | 1)
+    if effect == "solid":
+        value = color.lstrip("#")
+        if len(value) != 6:
+            value = "101815"
+        try:
+            red, green, blue = (
+                int(value[0:2], 16),
+                int(value[2:4], 16),
+                int(value[4:6], 16),
+            )
+        except ValueError:
+            red, green, blue = (16, 24, 21)
+        fill = np.empty_like(out)
+        fill[:, :] = (blue, green, red)
+        opacity = strength / 100.0
+        blended = cv2.addWeighted(out, 1.0 - opacity, fill, opacity, 0)
+        out[m] = blended[m]
+        return out
+
+    if effect == "noise":
+        rng = np.random.default_rng()
+        noise = rng.integers(0, 256, size=out.shape, dtype=np.uint8)
+        opacity = 0.35 + (0.65 * strength / 100.0)
+        noisy = cv2.addWeighted(out, 1.0 - opacity, noise, opacity, 0)
+        out[m] = noisy[m]
+        return out
+
+    if effect == "sticker":
+        sticker = out.copy()
+        sticker[m] = (42, 113, 78)
+        count, _, stats, _ = cv2.connectedComponentsWithStats(
+            (mask_u8 > 0).astype(np.uint8), 8
+        )
+        for index in range(1, count):
+            x, y, width, height, area = stats[index]
+            if area < 16:
+                continue
+            font_scale = max(0.35, min(1.2, min(width, height) / 90))
+            cv2.putText(
+                sticker,
+                "PRIVATE",
+                (x + 5, y + max(18, height // 2)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+        opacity = 0.35 + (0.65 * strength / 100.0)
+        blended = cv2.addWeighted(
+            out, 1.0 - opacity, sticker, opacity, 0
+        )
+        out[m] = blended[m]
+        return out
+
+    # Default and explicit blur. Kernel scales with the selected percentage.
+    min_side = min(out.shape[0], out.shape[1])
+    max_kernel = max(15, min(151, (min_side // 6) | 1))
+    k = max(3, int(3 + (max_kernel - 3) * strength / 100.0) | 1)
     blurred = cv2.GaussianBlur(out, (k, k), 0)
     out[m] = blurred[m]
     return out
@@ -428,10 +531,15 @@ def draw_overlay(
 # ---------------------------
 
 def main():
+    from ultralytics import YOLO
     ap = argparse.ArgumentParser()
     ap.add_argument("--image", required=True, help="Path to input image")
     ap.add_argument("--outdir", default="out", help="Output directory")
-    ap.add_argument("--model", default="yolov8n-seg.pt", help="YOLO seg model (e.g. yolov8n-seg.pt)")
+    ap.add_argument(
+        "--model",
+        default=str(Path(__file__).with_name("yolov8n-seg.pt")),
+        help="Path to a local YOLO segmentation model",
+    )
     ap.add_argument("--conf", type=float, default=0.4, help="YOLO confidence threshold")
     ap.add_argument("--choose", default="middle", help="left|middle|right|p0|1 etc.")
     ap.add_argument("--mask", default="face", choices=["face", "body", "both"], help="What to mask")

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>DataVeil — Protect first. Share second.</title>
+  <link rel="stylesheet" href="{{ url_for('root_static', path='/dataveil-shell.css') }}">
+</head>
+<body>
+  <main class="landing-shell">
+    <nav class="topbar" aria-label="DataVeil">
+      <a class="brand" href="/">Data<span>Veil</span></a>
+      <span class="local-pill"><i></i>Local processing</span>
+    </nav>
+
+    <section class="intro">
+      <p class="eyebrow">Privacy workspace</p>
+      <h1>Protect private data <em>before</em> it leaves your hands.</h1>
+      <p class="lede">
+        Mask documents, text, faces, and people locally. Take the protected
+        result to your AI tool, then return to restore what you concealed.
+      </p>
+    </section>
+
+    <section class="product-grid" aria-label="Choose a DataVeil workspace">
+      <a class="product-card text-card" href="/docmasker">
+        <div class="card-number">01</div>
+        <div class="card-icon text-icon" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div>
+          <p class="card-kicker">Text &amp; documents</p>
+          <h2>DocMasker</h2>
+          <p>
+            Paste text or upload PDF, DOCX, and PPTX files. Review every
+            detection, choose what to hide, and keep a recovery mapping.
+          </p>
+        </div>
+        <span class="open-link">Open workspace <b>→</b></span>
+      </a>
+
+      <a class="product-card image-card" href="/imagemasker">
+        <div class="card-number">02</div>
+        <div class="card-icon image-icon" aria-hidden="true">
+          <span></span>
+        </div>
+        <div>
+          <p class="card-kicker">Images &amp; people</p>
+          <h2>ImageMasker</h2>
+          <p>
+            Upload PNG or JPEG images, select people or custom areas, tune
+            the effect, and restore protected pixels after external editing.
+          </p>
+        </div>
+        <span class="open-link">Open workspace <b>→</b></span>
+      </a>
+    </section>
+
+    <section class="flow-strip" aria-label="DataVeil workflow">
+      <div><span>1</span><strong>Protect</strong><small>Choose private regions</small></div>
+      <i></i>
+      <div><span>2</span><strong>Edit</strong><small>Use your preferred AI tool</small></div>
+      <i></i>
+      <div><span>3</span><strong>Restore</strong><small>Bring protected data back</small></div>
+    </section>
+
+    <footer>
+      <p>No cloud APIs · No upload history · No database</p>
+      <p>Recovery files remain under your control.</p>
+    </footer>
+  </main>
+</body>
+</html>
