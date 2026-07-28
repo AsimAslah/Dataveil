@@ -1,0 +1,194 @@
++918606389148-Phone1
+- b.-Person11
+- c.-Person12
+- d.-Person13
+- mouse-Person3
+a-Company50
+a  coalition-Company36
+a union of states-Company54
+ajith ninan-Person18
+all india radio-Company64
+an-Company75
+and-Place22
+andhra pradesh-Place56
+annette-Person4
+area-Place10
+arman-Place75
+arunachal pradesh-Place48
+assam-Place46
+australia-Place44
+autonomous systems-Company5
+b.-Place76
+babu lal-Person16
+bangalore-Place2
+beirut-Place27
+belgium-Place7
+big-Place65
+bigger-Place63
+brazil-Place69
+brickrat-Person2
+brussels-Place17
+buddhism-Company16
+but-Place32
+c.-Place77
+c. coalition-Company47
+cagle cartoons inc.-Company28
+canada-Place36
+cell propulsion pvt ltd-Company4
+census-Company73
+central-Company19
+central government-Company68
+centre-Company69
+chandigarh-Place51
+chhattisgarh-Place57
+china-Place1
+constitutional-Company83
+country-Place24
+d.-Place78
+delhi-Place53
+each-Place39
+europe-Place9
+european-Company25
+european parliament-Company24
+f.-Company46
+federal-Company48
+federalism-Company49
+federation-Company51
+flutter-Company6
+france-Place12
+g.-Person10
+germany-Place14
+goa-Place73
+google-Company12
+google analytics-Company13
+government-Company21
+governments-Company58
+haryana-Place11
+houses of parliament-Company61
+independent-Company76
+india-Place21
+india today-Company71
+its-Company79
+jharkhand-Place60
+kannada-Person20
+karnataka-Place4
+kerala-Place6
+khag raj-Person14
+khalil-Person8
+kind-Company23
+kollam-Place5
+konkani-Person21
+kutty-Person19
+lakshadweep-Place52
+lanka-Place26
+lebanon-Place28
+linkedin.com/in/minhajfalaki/-SocialMediaID1
+luxembourg-Place15
+maharashtra-Place64
+mahatma gandhi-Person9
+maithili-Person22
+manipur-Place71
+mathworks-Company1
+mathworkshyderabad-Company2
+mcgill-queen's university press-Company52
+mechatronics engineering-Company7
+merchtem-Place38
+minhajfalaki@gmail.com-MailID1
+mixpanel-Company14
+mizoram-Place49
+mohammed minhaj falaki-Person1
+mumbai-Place34
+municipal corporation-Company85
+musharrafmust-Person26
+nadu-Place19
+nagaland-Place47
+native affairs-Company40
+netherlands-Place13
+nigeria-Place37
+odia-Person23
+one city-Company11
+ontario-Place35
+orissa-Place58
+ours-Place33
+own-Place41
+panch-Person27
+panchayat-Company80
+panchayati-Place66
+panchayati raj-Company44
+panchayats-Company45
+parliament-Company32
+pokharan-Place54
+porto alegre-Place70
+power-Company35
+product field team-Company3
+rajasthan-Place55
+ram ganesh-Person17
+ramachandra guha-Person25
+rural-Company78
+russia-Place30
+sangeeta-Person28
+santali-Person24
+sarita-Person15
+selvi-Person5
+share-Company37
+sikkim-Place72
+south asia-Place20
+space-Company34
+spain-Place45
+springer-Company9
+sri-Place25
+sri lanka-Place8
+state-Company20
+states-Company53
+states of india-Place50
+status-Company84
+suratkal-Place3
+switzerland-Place43
+syria-Place29
+system-Company82
+tamil-Place18
+tamil eelam-Place23
+tamil nadu-Place61
+the-Company56
+the  central government-Company60
+the  municipality.  in  a-Company81
+the  union-Company57
+the bombay high court-Company38
+the calgary sun-Company27
+the census of india-Company72
+the central government-Company17
+the central government's-Company65
+the central or union government-Company33
+the christian democratic union-Company29
+the german parliament-Company31
+the government of india-Company66
+the government of sikkim-Company67
+the high courts-Company62
+the indian union-Company55
+the liberal yabloko movement-Company42
+the lok sabha-Company70
+the maharashtra state government-Company39
+the social democratic party-Company30
+the state election commission-Company77
+the supreme court-Company63
+the times of india-Company74
+the union government-Company59
+the union of right forces-Company41
+the united states-Place74
+the zilla parishad-Place68
+third-Company22
+thomman --Company43
+tier-Place40
+tkm college of engineering-Company8
+union-Company26
+university-Company15
+us-Place31
+usa-Place42
+uttar pradesh-Place62
+uttarakhand-Place59
+vetal-Person7
+vikram-Person6
+wallonia-Place16
+wikipedia-Company18
+windows-Company10
+zilla parishad-Place67

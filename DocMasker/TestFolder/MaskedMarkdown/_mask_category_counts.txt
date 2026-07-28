@@ -1,0 +1,6 @@
+Company:85
+MailID:1
+Person:28
+Phone:1
+Place:78
+SocialMediaID:1
