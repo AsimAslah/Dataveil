@@ -35,6 +35,8 @@ import cv2
 import numpy as np
 import json
 
+os.environ.setdefault("YOLO_OFFLINE", "true")
+
 if TYPE_CHECKING:
     from insightface.app import FaceAnalysis
     from ultralytics import YOLO

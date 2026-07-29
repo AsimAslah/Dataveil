@@ -8,7 +8,7 @@ en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_
 phonenumbers==9.0.34
 
 numpy==2.2.6
-opencv-python==5.0.0.93
+opencv-python==4.12.0.88
 Pillow==12.3.0
 ultralytics==8.4.108
 torch==2.13.0

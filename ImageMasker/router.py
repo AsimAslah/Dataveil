@@ -88,7 +88,7 @@ def _parse_manual_regions(value: str | None) -> list[ManualRegion]:
 async def imagemasker_page(request: Request):
     return templates.TemplateResponse(
         request=request,
-        name="index.html",
+        name="index-v2.html",
     )
 
 

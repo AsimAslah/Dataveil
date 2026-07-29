@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
@@ -14,6 +15,10 @@ from typing import Any
 import cv2
 import numpy as np
 from PIL import Image, UnidentifiedImageError
+
+# Prevent Ultralytics from performing online availability checks or emitting
+# anonymous usage events when the local model is loaded.
+os.environ.setdefault("YOLO_OFFLINE", "true")
 
 from .config import (
     ALLOWED_EFFECTS,
@@ -171,10 +176,8 @@ def decode_uploaded_image(
 
     is_png = data.startswith(b"\x89PNG\r\n\x1a\n")
     is_jpeg = data.startswith(b"\xff\xd8")
-    if extension == ".png" and not is_png:
-        raise ImageProcessingError("The uploaded PNG is invalid.")
-    if extension in {".jpg", ".jpeg"} and not is_jpeg:
-        raise ImageProcessingError("The uploaded JPEG is invalid.")
+    if not (is_png or is_jpeg):
+        raise ImageProcessingError("The image must contain PNG or JPEG data.")
 
     try:
         with Image.open(BytesIO(data)) as header:
@@ -184,11 +187,8 @@ def decode_uploaded_image(
         raise ImageProcessingError(
             "The uploaded image could not be decoded."
         ) from exc
-    expected_format = "PNG" if extension == ".png" else "JPEG"
-    if decoded_format != expected_format:
-        raise ImageProcessingError(
-            "The image contents do not match the filename."
-        )
+    if decoded_format not in {"PNG", "JPEG"}:
+        raise ImageProcessingError("The image must contain PNG or JPEG data.")
     if width < 1 or height < 1 or width * height > MAX_IMAGE_PIXELS:
         raise ImageProcessingError("The decoded image dimensions are too large.")
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>DataVeil ImageMasker</title>
-  <link rel="stylesheet" href="{{ url_for('imagemasker_static', path='/dataveil-imagemasker.css') }}">
+  <link rel="stylesheet" href="{{ url_for('imagemasker_static', path='/dataveil-imagemasker-v2.css') }}">
 </head>
 <body>
   <main class="shell">
@@ -23,12 +23,48 @@
       </p>
     </header>
 
-    <div class="workflow-tabs" role="tablist" aria-label="ImageMasker workflow">
-      <button class="workflow-tab active" data-view="protect" type="button">Protect image</button>
-      <button class="workflow-tab" data-view="restore" type="button">Restore after AI</button>
-    </div>
+    <section class="workflow-chooser" aria-labelledby="workflow-question">
+      <div class="workflow-chooser-heading">
+        <p class="eyebrow">Choose your path</p>
+        <h2 id="workflow-question">What image do you have right now?</h2>
+      </div>
+      <div class="workflow-tabs" role="tablist" aria-label="ImageMasker workflow">
+        <button
+          id="protect-tab"
+          class="workflow-tab active"
+          data-view="protect"
+          type="button"
+          role="tab"
+          aria-controls="protect-view"
+          aria-selected="true"
+        >
+          <span class="workflow-icon" aria-hidden="true">01</span>
+          <span class="workflow-copy">
+            <strong>Original image</strong>
+            <small>Protect private regions before you send it to GenAI.</small>
+          </span>
+          <span class="workflow-action">Protect before GenAI <b>→</b></span>
+        </button>
+        <button
+          id="restore-tab"
+          class="workflow-tab genai-tab"
+          data-view="restore"
+          type="button"
+          role="tab"
+          aria-controls="restore-view"
+          aria-selected="false"
+        >
+          <span class="workflow-icon" aria-hidden="true">02</span>
+          <span class="workflow-copy">
+            <strong>Image returned by GenAI</strong>
+            <small>Restore after AI: upload one image; recovery attaches automatically.</small>
+          </span>
+          <span class="workflow-action">Upload GenAI result <b>→</b></span>
+        </button>
+      </div>
+    </section>
 
-    <section id="protect-view">
+    <section id="protect-view" role="tabpanel" aria-labelledby="protect-tab">
       <section class="panel upload-panel">
         <div class="section-heading">
           <div><span>01</span><h2>Upload an image</h2></div>
@@ -130,48 +166,74 @@
           It contains only the pixels you protected, the selection mask, and
           alignment data. Never send it to a GenAI service.
         </div>
+        <div class="ai-return-cta">
+          <div>
+            <strong>Finished editing with GenAI?</strong>
+            <span>Bring the generated image back here to recover your protected pixels.</span>
+          </div>
+          <button class="button return-button" data-switch-workflow="restore" type="button">
+            Upload GenAI result <span aria-hidden="true">→</span>
+          </button>
+        </div>
       </section>
     </section>
 
-    <section id="restore-view" hidden>
+    <section id="restore-view" role="tabpanel" aria-labelledby="restore-tab" hidden>
       <section class="restore-intro">
-        <p class="eyebrow">Bring private pixels back</p>
-        <h2>Restore your edited image</h2>
+        <p class="eyebrow">GenAI return lane</p>
+        <h2>Upload the image your GenAI model returned.</h2>
         <p>
-          Add the image returned by your AI tool and the recovery kit you
-          downloaded earlier. DataVeil aligns them locally and restores only
-          the protected regions.
+          Upload only the generated or edited image. DataVeil automatically
+          uses the recovery data kept from the protection step, aligns the
+          images locally, and blends the protected pixels into the AI result.
         </p>
+        <div class="return-recipe" aria-label="Restore workflow requirements">
+          <span><b>1</b> GenAI output image</span>
+          <i aria-hidden="true">+</i>
+          <span><b>2</b> Automatic recovery</span>
+          <i aria-hidden="true">→</i>
+          <span><b>3</b> Restored image</span>
+        </div>
       </section>
 
       <div class="restore-grid">
         <section class="panel">
           <div class="section-heading">
-            <div><span>01</span><h2>Edited image</h2></div>
+            <div><span>01 · GenAI output</span><h2>Image from your AI model</h2></div>
+            <small>PNG, JPG, or JPEG · up to 15 MB</small>
           </div>
           <label class="upload-zone compact-upload" for="edited-image-file">
             <span class="upload-mark">↑</span>
-            <strong>Choose edited PNG or JPEG</strong>
+            <strong>Upload GenAI image</strong>
+            <small>Restoration starts automatically after you choose the image.</small>
             <input id="edited-image-file" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg">
           </label>
           <p id="edited-image-name" class="selected-name">No image selected</p>
         </section>
 
-        <section class="panel">
+        <section class="panel auto-recovery-panel">
           <div class="section-heading">
-            <div><span>02</span><h2>Recovery kit</h2></div>
+            <div><span>02 · Automatic</span><h2>Recovery data</h2></div>
+            <small>No upload required</small>
           </div>
-          <label class="upload-zone compact-upload" for="image-recovery-file">
-            <span class="upload-mark">↑</span>
-            <strong>Choose DataVeil recovery JSON</strong>
-            <input id="image-recovery-file" type="file" accept=".json,application/json">
-          </label>
-          <p id="recovery-file-name" class="selected-name">No recovery kit selected</p>
+          <div id="automatic-recovery-status" class="automatic-recovery-status" data-state="missing">
+            <span class="recovery-status-mark" aria-hidden="true">·</span>
+            <div>
+              <strong id="automatic-recovery-title">Waiting for protected image</strong>
+              <p id="automatic-recovery-copy">
+                Protect the original image first. DataVeil will keep its
+                recovery data temporarily in this browser tab.
+              </p>
+            </div>
+          </div>
+          <button id="clear-automatic-recovery" class="tool-button clear-recovery" type="button" hidden>
+            Clear automatic recovery
+          </button>
         </section>
       </div>
 
       <button id="restore-image-button" class="button primary restore-button" type="button">
-        Restore private pixels
+        Extract &amp; restore private pixels
       </button>
       <p id="restore-error" class="message error" role="alert" hidden></p>
 
@@ -199,6 +261,6 @@
       No image history · No cloud APIs · Recovery data stays under your control
     </footer>
   </main>
-  <script src="{{ url_for('imagemasker_static', path='/dataveil-imagemasker.js') }}" defer></script>
+  <script src="{{ url_for('imagemasker_static', path='/dataveil-imagemasker-v2.js') }}" defer></script>
 </body>
 </html>

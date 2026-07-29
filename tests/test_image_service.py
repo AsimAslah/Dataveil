@@ -33,6 +33,11 @@ def test_decoder_accepts_png_jpg_and_jpeg_extensions() -> None:
     assert decode_uploaded_image(
         jpeg, filename="photo.jpeg", content_type="image/jpeg"
     ).shape == image.shape
+    # The repository's preserved TestImage.png is JPEG-encoded despite its
+    # extension. Both codecs are allowed, so safe decoding follows the content.
+    assert decode_uploaded_image(
+        jpeg, filename="legacy.png", content_type="image/png"
+    ).shape == image.shape
 
 
 @pytest.mark.parametrize(

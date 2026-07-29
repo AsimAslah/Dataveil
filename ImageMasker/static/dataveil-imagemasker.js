@@ -23,11 +23,16 @@ const maskError = document.querySelector("#mask-error");
 const imageResult = document.querySelector("#image-result");
 const maskedPreview = document.querySelector("#masked-preview");
 const editedImageFile = document.querySelector("#edited-image-file");
-const recoveryFile = document.querySelector("#image-recovery-file");
 const restoreImageButton = document.querySelector("#restore-image-button");
 const restoreError = document.querySelector("#restore-error");
 const restoreResult = document.querySelector("#restore-result");
 const restoredPreview = document.querySelector("#restored-preview");
+const automaticRecoveryStatus = document.querySelector("#automatic-recovery-status");
+const automaticRecoveryTitle = document.querySelector("#automatic-recovery-title");
+const automaticRecoveryCopy = document.querySelector("#automatic-recovery-copy");
+const clearAutomaticRecoveryButton = document.querySelector("#clear-automatic-recovery");
+const recoveryStatusMark = automaticRecoveryStatus.querySelector(".recovery-status-mark");
+const RECOVERY_SESSION_KEY = "dataveil-image-recovery-v1";
 
 let sourceImage = null;
 let sourceObjectUrl = null;
@@ -52,6 +57,68 @@ function hideError(element) {
   element.hidden = true;
 }
 
+function readAutomaticRecovery() {
+  try {
+    const stored = window.sessionStorage.getItem(RECOVERY_SESSION_KEY);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    if (parsed?.format !== "dataveil-image-recovery") {
+      window.sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    try {
+      window.sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+    } catch {
+      // Storage can be unavailable in hardened browser modes.
+    }
+    return null;
+  }
+}
+
+function updateAutomaticRecoveryStatus() {
+  const isReady = Boolean(recoveryPayload);
+  automaticRecoveryStatus.dataset.state = isReady ? "ready" : "missing";
+  recoveryStatusMark.textContent = isReady ? "✓" : "·";
+  automaticRecoveryTitle.textContent = isReady
+    ? "Recovery data ready"
+    : "Waiting for protected image";
+  automaticRecoveryCopy.textContent = isReady
+    ? "DataVeil will attach it automatically. You only need to upload the GenAI image."
+    : "Protect the original image first. DataVeil will keep its recovery data temporarily in this browser tab.";
+  clearAutomaticRecoveryButton.hidden = !isReady;
+}
+
+function rememberAutomaticRecovery(payload) {
+  recoveryPayload = payload;
+  try {
+    window.sessionStorage.setItem(
+      RECOVERY_SESSION_KEY,
+      JSON.stringify(payload)
+    );
+  } catch {
+    // Large recovery payloads remain available in memory for this page.
+    try {
+      window.sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+    } catch {
+      // Storage can be unavailable in hardened browser modes.
+    }
+  }
+  updateAutomaticRecoveryStatus();
+}
+
+function clearAutomaticRecovery() {
+  recoveryPayload = null;
+  try {
+    window.sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+  } catch {
+    // The in-memory value is still cleared.
+  }
+  restoreResult.hidden = true;
+  updateAutomaticRecoveryStatus();
+}
+
 function setBusy(button, busy, busyText) {
   button.disabled = busy;
   button.classList.toggle("is-loading", busy);
@@ -64,12 +131,29 @@ function setBusy(button, busy, busyText) {
   }
 }
 
-function activateWorkflow(view) {
+function activateWorkflow(view, { scroll = false, updateUrl = true } = {}) {
+  const activeView = view === "restore" ? "restore" : "protect";
   document.querySelectorAll(".workflow-tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === view);
+    const isActive = button.dataset.view === activeView;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", String(isActive));
+    button.tabIndex = isActive ? 0 : -1;
   });
-  document.querySelector("#protect-view").hidden = view !== "protect";
-  document.querySelector("#restore-view").hidden = view !== "restore";
+  document.querySelector("#protect-view").hidden = activeView !== "protect";
+  document.querySelector("#restore-view").hidden = activeView !== "restore";
+
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.hash = activeView;
+    window.history.replaceState(null, "", url);
+  }
+
+  if (scroll) {
+    document.querySelector(".workflow-chooser").scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
 }
 
 function loadSourceImage(file) {
@@ -296,7 +380,7 @@ async function maskImage() {
     });
     const payload = await responseJson(response, "Image masking failed.");
     maskedBlob = base64ToBlob(payload.image_base64, payload.media_type);
-    recoveryPayload = payload.recovery;
+    rememberAutomaticRecovery(payload.recovery);
     if (maskedObjectUrl) URL.revokeObjectURL(maskedObjectUrl);
     maskedObjectUrl = URL.createObjectURL(maskedBlob);
     maskedPreview.src = maskedObjectUrl;
@@ -314,15 +398,32 @@ async function maskImage() {
 
 async function restoreImage() {
   hideError(restoreError);
-  if (!editedImageFile.files.length || !recoveryFile.files.length) {
-    showError(restoreError, "Choose both the edited image and its recovery kit.");
+  if (!editedImageFile.files.length) {
+    showError(
+      restoreError,
+      "Choose the image returned by GenAI."
+    );
+    return;
+  }
+  if (!recoveryPayload) {
+    showError(
+      restoreError,
+      "Protect the original image first so DataVeil can prepare recovery data automatically."
+    );
     return;
   }
   setBusy(restoreImageButton, true, "Restoring");
   try {
     const form = new FormData();
     form.append("edited_image", editedImageFile.files[0]);
-    form.append("recovery_file", recoveryFile.files[0]);
+    form.append(
+      "recovery_file",
+      new Blob(
+        [JSON.stringify(recoveryPayload)],
+        { type: "application/json" }
+      ),
+      "dataveil-automatic-recovery.json"
+    );
     const response = await fetch("/api/image/restore", {
       method: "POST",
       body: form,
@@ -338,8 +439,8 @@ async function restoreImage() {
     restoredPreview.src = restoredObjectUrl;
     document.querySelector("#alignment-status").textContent =
       response.headers.get("X-DataVeil-Alignment") === "applied"
-        ? "Feature alignment applied"
-        : "Size mapping applied";
+        ? "Feature alignment and soft blending applied"
+        : "Size mapping and soft blending applied";
     restoreResult.hidden = false;
     restoreResult.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
@@ -365,6 +466,18 @@ const effectLabels = {
 
 document.querySelectorAll(".workflow-tab").forEach((button) => {
   button.addEventListener("click", () => activateWorkflow(button.dataset.view));
+  button.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    const nextView = button.dataset.view === "protect" ? "restore" : "protect";
+    activateWorkflow(nextView);
+    document.querySelector(`.workflow-tab[data-view="${nextView}"]`).focus();
+  });
+});
+document.querySelectorAll("[data-switch-workflow]").forEach((button) => {
+  button.addEventListener("click", () => {
+    activateWorkflow(button.dataset.switchWorkflow, { scroll: true });
+  });
 });
 imageFile.addEventListener("change", () => {
   const file = imageFile.files[0];
@@ -411,14 +524,29 @@ document.querySelector("#download-recovery-button").addEventListener("click", ()
   );
 });
 editedImageFile.addEventListener("change", () => {
+  const file = editedImageFile.files[0];
   document.querySelector("#edited-image-name").textContent =
-    editedImageFile.files[0]?.name || "No image selected";
+    file?.name || "No image selected";
+  restoreResult.hidden = true;
+  if (!file) return;
+  if (!recoveryPayload) {
+    showError(
+      restoreError,
+      "Protect the original image first so DataVeil can prepare recovery data automatically."
+    );
+    return;
+  }
+  restoreImage();
 });
-recoveryFile.addEventListener("change", () => {
-  document.querySelector("#recovery-file-name").textContent =
-    recoveryFile.files[0]?.name || "No recovery kit selected";
-});
+clearAutomaticRecoveryButton.addEventListener("click", clearAutomaticRecovery);
 restoreImageButton.addEventListener("click", restoreImage);
 document.querySelector("#download-restored-button").addEventListener("click", () => {
   if (restoredBlob) downloadBlob(restoredBlob, "dataveil-restored.png");
 });
+
+activateWorkflow(
+  window.location.hash.toLowerCase() === "#restore" ? "restore" : "protect",
+  { updateUrl: false }
+);
+recoveryPayload = readAutomaticRecovery();
+updateAutomaticRecoveryStatus();

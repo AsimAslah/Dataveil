@@ -439,19 +439,62 @@ def map_delivery_to_return(
     )
 
 
-def unmask_only_region(edited_bgr: np.ndarray, mapped_original_bgr: np.ndarray, mapped_mask_u8: np.ndarray) -> np.ndarray:
+def build_feather_alpha(
+    mapped_mask_u8: np.ndarray,
+    *,
+    max_radius: int = 32,
+) -> np.ndarray:
     """
-    Replace only masked pixels in edited image with pixels from mapped_original.
+    Build an inside-only feathered alpha mask.
+
+    A hard binary paste exposes circular or rectangular mask boundaries when
+    the GenAI result changes lighting, texture, or color. Distance-based
+    feathering keeps pixels outside the protected region untouched while
+    blending the original pixels progressively toward the center.
+    """
+    binary = (mapped_mask_u8 > 127).astype(np.uint8)
+    rows, columns = np.where(binary > 0)
+    if not rows.size or not columns.size:
+        return np.zeros(mapped_mask_u8.shape[:2], dtype=np.float32)
+
+    region_height = int(rows.max() - rows.min() + 1)
+    region_width = int(columns.max() - columns.min() + 1)
+    short_side = max(1, min(region_height, region_width))
+    feather_radius = max(
+        3,
+        min(max_radius, int(round(short_side * 0.18))),
+    )
+
+    distance = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
+    alpha = np.clip(distance / float(feather_radius), 0.0, 1.0)
+    # Smoothstep avoids a visible change in slope at either end of the blend.
+    alpha = alpha * alpha * (3.0 - 2.0 * alpha)
+    return alpha.astype(np.float32)
+
+
+def unmask_only_region(
+    edited_bgr: np.ndarray,
+    mapped_original_bgr: np.ndarray,
+    mapped_mask_u8: np.ndarray,
+) -> np.ndarray:
+    """
+    Restore masked pixels with a soft boundary to avoid visible mask shapes.
     """
     if edited_bgr.shape != mapped_original_bgr.shape:
         raise SystemExit("Internal error: mapped original and edited shapes differ.")
     if mapped_mask_u8.shape[:2] != edited_bgr.shape[:2]:
         raise SystemExit("Internal error: mapped mask and edited shapes differ.")
 
-    out = edited_bgr.copy()
-    m = mapped_mask_u8.astype(bool)
-    out[m] = mapped_original_bgr[m]
-    return out
+    alpha = build_feather_alpha(mapped_mask_u8)
+    if not np.any(alpha):
+        return edited_bgr.copy()
+
+    alpha_3d = alpha[:, :, np.newaxis]
+    blended = (
+        mapped_original_bgr.astype(np.float32) * alpha_3d
+        + edited_bgr.astype(np.float32) * (1.0 - alpha_3d)
+    )
+    return np.clip(np.rint(blended), 0, 255).astype(np.uint8)
 
 
 def main():
