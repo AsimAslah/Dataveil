@@ -442,15 +442,16 @@ def map_delivery_to_return(
 def build_feather_alpha(
     mapped_mask_u8: np.ndarray,
     *,
-    max_radius: int = 32,
+    max_radius: int = 16,
 ) -> np.ndarray:
     """
-    Build an inside-only feathered alpha mask.
+    Build a solid restoration core with a short outward feather.
 
-    A hard binary paste exposes circular or rectangular mask boundaries when
-    the GenAI result changes lighting, texture, or color. Distance-based
-    feathering keeps pixels outside the protected region untouched while
-    blending the original pixels progressively toward the center.
+    The protected image can contain a strongly colored privacy effect right
+    up to the mask boundary. An inside-only feather mixes those contaminated
+    pixels back into the restored edge and creates a visible colored halo.
+    Keeping the whole protected region opaque removes that contamination;
+    the small outward feather then softens the clean source-to-edit seam.
     """
     binary = (mapped_mask_u8 > 127).astype(np.uint8)
     rows, columns = np.where(binary > 0)
@@ -462,11 +463,19 @@ def build_feather_alpha(
     short_side = max(1, min(region_height, region_width))
     feather_radius = max(
         3,
-        min(max_radius, int(round(short_side * 0.18))),
+        min(max_radius, int(round(short_side * 0.08))),
     )
 
-    distance = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
-    alpha = np.clip(distance / float(feather_radius), 0.0, 1.0)
+    distance_outside = cv2.distanceTransform(1 - binary, cv2.DIST_L2, 5)
+    alpha = np.where(
+        binary > 0,
+        1.0,
+        np.clip(
+            1.0 - (distance_outside / float(feather_radius)),
+            0.0,
+            1.0,
+        ),
+    )
     # Smoothstep avoids a visible change in slope at either end of the blend.
     alpha = alpha * alpha * (3.0 - 2.0 * alpha)
     return alpha.astype(np.float32)

@@ -13,6 +13,8 @@ modules:
 No cloud API, database, analytics service, or server-side upload history is
 used.
 
+![DataVeil home](screenshots/home.png)
+
 ## Features
 
 ### DocMasker
@@ -31,7 +33,8 @@ used.
 
 - local YOLO person segmentation using the bundled
   `ImageMasker/yolov8n-seg.pt`;
-- local OpenCV face detection;
+- local OpenCV face localization followed by pixel-level BiSeNet semantic
+  face parsing using the bundled ResNet-18 weights;
 - face, body, individual-person, and manually drawn region selection;
 - blur, pixelate, mosaic, black box, custom color, noise, privacy sticker,
   and silhouette effects;
@@ -39,10 +42,52 @@ used.
 - masked PNG and recovery-kit downloads;
 - post-AI restoration using the existing ORB/ECC alignment logic.
 
-The image recovery kit contains the binary selection mask, a masked reference
-image, and only the original pixels inside the protected regions. It does not
-contain the complete original image. Treat the recovery kit as sensitive and
-never send it to an external AI service.
+The image recovery package contains the exact binary semantic/instance
+selection mask, a masked reference image, and only the original pixels inside
+the protected regions. Restoration maps that saved mask and those saved
+pixels onto the GenAI-returned image; it never reruns segmentation to guess
+the face boundary. The package does not contain the complete original image.
+Treat it as sensitive and never send it to an external AI service.
+
+## ImageMasker Demo
+
+### Upload
+
+![ImageMasker upload](screenshots/imagemasker-upload.png)
+
+### Select Regions
+
+![Region and mask selection](screenshots/region-and-mask-selection.png)
+
+### Choose Mask
+
+![Masking types](screenshots/masking-process.png)
+
+### Protect
+
+![Protected image](screenshots/protected-image.png)
+
+### GenAI Return
+
+![GenAI-returned image](screenshots/genai-return.png)
+
+### Restore
+
+![Restored result](screenshots/restored-result.png)
+
+## DocMasker Demo
+
+### Upload
+
+![DocMasker upload](screenshots/docmasker-upload.png)
+
+### Select Data
+
+![Sensitive data selection](screenshots/sensitive-data-selection.png)
+
+### Protect
+
+![Protected text output](screenshots/protected-text-output.png)
 
 ## Architecture
 
@@ -127,7 +172,7 @@ values cannot be reliably recovered after structural edits.
 ### Protect and restore an image
 
 1. Open **ImageMasker** and upload a PNG or JPEG.
-2. Detect people and faces.
+2. Detect people and create pixel-level semantic face masks.
 3. Select the people, faces, bodies, or custom boxes to protect.
 4. Choose an effect and strength.
 5. Download the masked PNG and recovery kit.

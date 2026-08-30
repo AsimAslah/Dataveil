@@ -88,7 +88,7 @@ def _parse_manual_regions(value: str | None) -> list[ManualRegion]:
 async def imagemasker_page(request: Request):
     return templates.TemplateResponse(
         request=request,
-        name="index-v2.html",
+        name="index-v4.html",
     )
 
 
@@ -121,6 +121,7 @@ async def mask_image(
     effect: str = Form("blur"),
     strength: int = Form(65),
     color: str = Form("#101815"),
+    face_scale: int = Form(100),
     confidence: float = Form(DEFAULT_CONFIDENCE),
     service: ImageMaskingService = Depends(get_image_masking_service),
 ) -> ImageMaskResponse:
@@ -138,6 +139,7 @@ async def mask_image(
             effect=effect,
             strength=strength,
             color=color,
+            face_scale=face_scale,
             confidence=confidence,
         )
     except (ImageProcessingError, ValueError, json.JSONDecodeError) as exc:

@@ -5,16 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>DataVeil — Protect first. Share second.</title>
+  <link rel="stylesheet" href="{{ url_for('root_static', path='/dataveil-design-system.css') }}">
   <link rel="stylesheet" href="{{ url_for('root_static', path='/dataveil-shell.css') }}">
 </head>
 <body>
   <main class="landing-shell">
-    <nav class="topbar" aria-label="DataVeil">
+    <nav class="topbar" aria-label="Primary navigation">
       <a class="brand" href="/">Data<span>Veil</span></a>
-      <span class="local-pill"><i></i>Local processing</span>
+      <div class="nav-actions">
+        <a class="nav-link" href="/docmasker">DocMasker</a>
+        <a class="nav-link" href="/imagemasker">ImageMasker</a>
+        <span class="local-pill"><i aria-hidden="true"></i>Local processing</span>
+      </div>
     </nav>
 
-    <section class="intro">
+    <section class="intro" data-reveal>
       <p class="eyebrow">Privacy workspace</p>
       <h1>Protect private data <em>before</em> it leaves your hands.</h1>
       <p class="lede">
@@ -23,8 +28,8 @@
       </p>
     </section>
 
-    <section class="product-grid" aria-label="Choose a DataVeil workspace">
-      <a class="product-card text-card" href="/docmasker">
+    <section class="product-grid" aria-label="Choose a DataVeil workspace" data-reveal>
+      <article class="product-card text-card">
         <div class="card-number">01</div>
         <div class="card-icon text-icon" aria-hidden="true">
           <span></span><span></span><span></span>
@@ -33,12 +38,19 @@
           <p class="card-kicker">Text &amp; documents</p>
           <h2>DocMasker</h2>
           <p>
-            Paste text or upload PDF, DOCX, and PPTX files. Review every
-            detection, choose what to hide, and keep a recovery mapping.
+            Paste text or upload a CV, résumé, PDF, DOCX, or PPTX. Review
+            every detection, choose what to hide, and keep a recovery mapping.
           </p>
         </div>
-        <span class="open-link">Open workspace <b>→</b></span>
-      </a>
+        <div class="card-actions" aria-label="DocMasker actions">
+          <a class="card-action primary-action" href="/docmasker">
+            Paste text <b>→</b>
+          </a>
+          <a class="card-action return-action" href="/docmasker#upload-cv">
+            Upload CV / resume <b>→</b>
+          </a>
+        </div>
+      </article>
 
       <article class="product-card image-card">
         <div class="card-number">02</div>
@@ -64,18 +76,26 @@
       </article>
     </section>
 
-    <section class="flow-strip" aria-label="DataVeil workflow">
-      <div><span>1</span><strong>Protect</strong><small>Choose private regions</small></div>
-      <i></i>
-      <div><span>2</span><strong>Edit</strong><small>Use your preferred AI tool</small></div>
-      <i></i>
-      <div><span>3</span><strong>Restore</strong><small>Bring protected data back</small></div>
+    <section class="workflow-overview" aria-labelledby="workflow-title" data-reveal>
+      <div class="workflow-overview-copy">
+        <p class="eyebrow">One clear workflow</p>
+        <h2 id="workflow-title">From upload to safe recovery.</h2>
+        <p>Each workspace follows the same sequence, with recovery kept separate from anything you share externally.</p>
+      </div>
+      <ol class="process-trail" aria-label="DataVeil privacy workflow">
+        <li><b>1</b><span><strong>Upload</strong><small>Add private content</small></span></li>
+        <li><b>2</b><span><strong>Configure</strong><small>Choose what to protect</small></span></li>
+        <li><b>3</b><span><strong>Mask</strong><small>Process locally</small></span></li>
+        <li><b>4</b><span><strong>Review</strong><small>Check the protected result</small></span></li>
+        <li><b>5</b><span><strong>Download or restore</strong><small>Keep recovery private</small></span></li>
+      </ol>
     </section>
 
-    <footer>
-      <p>No cloud APIs · No upload history · No database</p>
-      <p>Recovery files remain under your control.</p>
+    <footer class="site-footer">
+      <p><strong>DataVeil</strong> · No cloud APIs · No upload history · No database</p>
+      <p>Recovery material always remains under your control.</p>
     </footer>
   </main>
+  <script src="{{ url_for('root_static', path='/dataveil-ui.js') }}" defer></script>
 </body>
 </html>

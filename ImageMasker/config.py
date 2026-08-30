@@ -7,6 +7,12 @@ from pathlib import Path
 
 MODULE_DIR = Path(__file__).resolve().parent
 YOLO_MODEL_PATH = MODULE_DIR / "yolov8n-seg.pt"
+FACE_PARSING_MODEL_PATH = (
+    MODULE_DIR / "models" / "face-parsing-resnet18.pt"
+)
+FACE_PARSING_MODEL_SHA256 = (
+    "18c44e06b77e47da86fe2b48fac78e0ccbd0b5241c829f9487ebf7fd4a6389e6"
+)
 
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
 MAX_RECOVERY_BYTES = 48 * 1024 * 1024

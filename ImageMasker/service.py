@@ -25,9 +25,16 @@ from .config import (
     ALLOWED_IMAGE_EXTENSIONS,
     ALLOWED_IMAGE_MIME_TYPES,
     DEFAULT_CONFIDENCE,
+    FACE_PARSING_MODEL_PATH,
+    FACE_PARSING_MODEL_SHA256,
     MAX_IMAGE_BYTES,
     MAX_IMAGE_PIXELS,
     YOLO_MODEL_PATH,
+)
+from .face_parser import (
+    SemanticFaceParser,
+    expanded_face_crop,
+    largest_mask_component,
 )
 from .schemas import (
     BoundingBox,
@@ -88,6 +95,19 @@ def _load_face_cascade():
     return cascade
 
 
+@lru_cache(maxsize=1)
+def _load_face_parser() -> SemanticFaceParser:
+    try:
+        return SemanticFaceParser(
+            FACE_PARSING_MODEL_PATH,
+            expected_sha256=FACE_PARSING_MODEL_SHA256,
+        )
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        raise ImageProcessingError(
+            "The local semantic face parsing model is unavailable."
+        ) from exc
+
+
 def _default_person_detector(
     image: np.ndarray, confidence: float
 ) -> list[PersonInstance]:
@@ -98,6 +118,93 @@ def _default_person_detector(
             conf=confidence,
             device="cpu",
         )
+
+
+def _face_instance_from_mask(
+    mask: np.ndarray,
+    *,
+    score: float,
+    mask_type: str,
+) -> FaceInstance | None:
+    rows, columns = np.where(mask > 0)
+    if not rows.size or not columns.size:
+        return None
+    face = FaceInstance(
+        bbox_xyxy=(
+            int(columns.min()),
+            int(rows.min()),
+            int(columns.max()) + 1,
+            int(rows.max()) + 1,
+        ),
+        score=score,
+        landmarks_106=None,
+        mask=mask,
+    )
+    setattr(face, "_dataveil_mask_type", mask_type)
+    return face
+
+
+def _semantic_faces_from_people(
+    image: np.ndarray,
+    people: list[PersonInstance],
+) -> list[FaceInstance]:
+    """Parse one semantic head mask from each person segmentation region."""
+    if not people:
+        return []
+
+    parser = _load_face_parser()
+    faces: list[FaceInstance] = []
+    for person in people:
+        x1, y1, x2, y2 = person.bbox_xyxy
+        person_height = max(1, y2 - y1)
+        head_y2 = min(image.shape[0], y1 + int(round(person_height * 0.48)))
+        crop_bbox = (x1, y1, x2, head_y2)
+        with _face_lock:
+            mask = parser.segment_region(image, crop_bbox)
+
+        support_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE,
+            (9, 9),
+        )
+        person_support = cv2.dilate(
+            (person.mask > 0).astype(np.uint8) * 255,
+            support_kernel,
+            iterations=1,
+        )
+        mask = cv2.bitwise_and(mask, person_support)
+        mask = largest_mask_component(mask)
+        face = _face_instance_from_mask(
+            mask,
+            score=max(0.55, min(0.95, person.score * 0.93)),
+            mask_type="semantic",
+        )
+        if face is None:
+            # Privacy-safe conservative fallback for a detected person whose
+            # face parser returned no usable pixels.
+            fallback = np.zeros(image.shape[:2], dtype=np.uint8)
+            center = ((x1 + x2) // 2, (y1 + head_y2) // 2)
+            axes = (
+                max(1, int(round((x2 - x1) * 0.24))),
+                max(1, int(round((head_y2 - y1) * 0.42))),
+            )
+            cv2.ellipse(
+                fallback,
+                center,
+                axes,
+                0,
+                0,
+                360,
+                255,
+                -1,
+            )
+            face = _face_instance_from_mask(
+                fallback,
+                score=0.45,
+                mask_type="fallback",
+            )
+        if face is not None:
+            faces.append(face)
+    return faces
 
 
 def _default_face_detector(image: np.ndarray) -> list[FaceInstance]:
@@ -111,27 +218,47 @@ def _default_face_detector(image: np.ndarray) -> list[FaceInstance]:
             minNeighbors=5,
             minSize=(min_side, min_side),
         )
-    height, width = image.shape[:2]
     faces: list[FaceInstance] = []
+    if not len(rectangles):
+        return faces
+
+    parser = _load_face_parser()
     for x, y, box_width, box_height in rectangles:
-        padding_x = int(box_width * 0.15)
-        padding_y = int(box_height * 0.2)
-        x1 = max(0, int(x - padding_x))
-        y1 = max(0, int(y - padding_y))
-        x2 = min(width - 1, int(x + box_width + padding_x))
-        y2 = min(height - 1, int(y + box_height + padding_y))
-        mask = np.zeros((height, width), dtype=np.uint8)
-        center = ((x1 + x2) // 2, (y1 + y2) // 2)
-        axes = (max(1, (x2 - x1) // 2), max(1, (y2 - y1) // 2))
-        cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
-        faces.append(
-            FaceInstance(
-                bbox_xyxy=(x1, y1, x2, y2),
-                score=0.75,
-                landmarks_106=None,
-                mask=mask,
-            )
+        detector_bbox = (
+            int(x),
+            int(y),
+            int(x + box_width),
+            int(y + box_height),
         )
+        with _face_lock:
+            mask = parser.segment(image, detector_bbox)
+
+        face = _face_instance_from_mask(
+            mask,
+            score=0.86,
+            mask_type="semantic",
+        )
+        if face is None:
+            # Privacy-safe last resort: if parsing cannot resolve a detected
+            # face, keep the conservative fallback rather than exposing it.
+            x1, y1, x2, y2 = expanded_face_crop(
+                detector_bbox,
+                image.shape,
+            )
+            mask = np.zeros(image.shape[:2], dtype=np.uint8)
+            center = ((x1 + x2) // 2, (y1 + y2) // 2)
+            axes = (
+                max(1, (x2 - x1) // 2),
+                max(1, (y2 - y1) // 2),
+            )
+            cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
+            face = _face_instance_from_mask(
+                mask,
+                score=0.55,
+                mask_type="fallback",
+            )
+        if face is not None:
+            faces.append(face)
     return faces
 
 
@@ -146,6 +273,34 @@ def _encode_png(image: np.ndarray) -> bytes:
 
 def _to_base64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
+
+
+def _mask_preview_png_base64(
+    mask: np.ndarray,
+    bbox_xyxy: tuple[int, int, int, int],
+) -> str:
+    """Encode a compact transparent overlay for the browser preview."""
+    x1, y1, x2, y2 = bbox_xyxy
+    cropped = mask[y1:y2, x1:x2]
+    overlay = np.zeros((*cropped.shape, 4), dtype=np.uint8)
+    active = cropped > 0
+    # OpenCV stores BGRA; this encodes as DataVeil's warm orange in PNG.
+    overlay[active, :3] = (75, 163, 240)
+    overlay[active, 3] = 58
+    contours, _hierarchy = cv2.findContours(
+        (active.astype(np.uint8) * 255),
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE,
+    )
+    thickness = max(1, int(round(min(cropped.shape) / 100)))
+    cv2.drawContours(
+        overlay,
+        contours,
+        -1,
+        (75, 163, 240, 235),
+        thickness=thickness,
+    )
+    return _to_base64(_encode_png(overlay))
 
 
 def _from_base64(value: str, label: str) -> bytes:
@@ -212,6 +367,56 @@ def _decode_recovery_image(
     return image
 
 
+def scale_binary_mask(
+    mask: np.ndarray,
+    scale_percent: int,
+) -> np.ndarray:
+    """Scale a binary mask around its own center without changing the canvas."""
+    if scale_percent == 100:
+        return mask.copy()
+
+    rows, columns = np.where(mask > 0)
+    if not rows.size or not columns.size:
+        return mask.copy()
+
+    y1, y2 = int(rows.min()), int(rows.max()) + 1
+    x1, x2 = int(columns.min()), int(columns.max()) + 1
+    crop = mask[y1:y2, x1:x2]
+    scale = scale_percent / 100.0
+    scaled_width = max(1, int(round(crop.shape[1] * scale)))
+    scaled_height = max(1, int(round(crop.shape[0] * scale)))
+    scaled = cv2.resize(
+        crop,
+        (scaled_width, scaled_height),
+        interpolation=cv2.INTER_NEAREST,
+    )
+
+    center_x = (x1 + x2) / 2.0
+    center_y = (y1 + y2) / 2.0
+    target_x1 = int(round(center_x - scaled_width / 2.0))
+    target_y1 = int(round(center_y - scaled_height / 2.0))
+    target_x2 = target_x1 + scaled_width
+    target_y2 = target_y1 + scaled_height
+
+    canvas = np.zeros_like(mask)
+    clipped_x1 = max(0, target_x1)
+    clipped_y1 = max(0, target_y1)
+    clipped_x2 = min(mask.shape[1], target_x2)
+    clipped_y2 = min(mask.shape[0], target_y2)
+    if clipped_x2 <= clipped_x1 or clipped_y2 <= clipped_y1:
+        return canvas
+
+    source_x1 = clipped_x1 - target_x1
+    source_y1 = clipped_y1 - target_y1
+    source_x2 = source_x1 + (clipped_x2 - clipped_x1)
+    source_y2 = source_y1 + (clipped_y2 - clipped_y1)
+    canvas[clipped_y1:clipped_y2, clipped_x1:clipped_x2] = scaled[
+        source_y1:source_y2,
+        source_x1:source_x2,
+    ]
+    return (canvas > 127).astype(np.uint8) * 255
+
+
 class ImageMaskingService:
     def __init__(
         self,
@@ -221,6 +426,7 @@ class ImageMaskingService:
     ) -> None:
         self._person_detector = person_detector or _default_person_detector
         self._face_detector = face_detector or _default_face_detector
+        self._uses_default_face_parser = face_detector is None
 
     def _detect(
         self, image: np.ndarray, confidence: float
@@ -232,7 +438,10 @@ class ImageMaskingService:
         people = label_people_left_to_right(
             self._person_detector(image, confidence)
         )
-        faces = self._face_detector(image)
+        if self._uses_default_face_parser and people:
+            faces = _semantic_faces_from_people(image, people)
+        else:
+            faces = self._face_detector(image)
         face_by_person = assign_faces_to_people(
             people, faces, min_iou=0.008
         )
@@ -257,6 +466,7 @@ class ImageMaskingService:
                         width=max(1, x2 - x1),
                         height=max(1, y2 - y1),
                     ),
+                    mask_type="instance",
                 )
             )
             masks_by_id[body_id] = person.mask
@@ -278,6 +488,17 @@ class ImageMaskingService:
                             y=fy1,
                             width=max(1, fx2 - fx1),
                             height=max(1, fy2 - fy1),
+                        ),
+                        mask_type=getattr(
+                            face,
+                            "_dataveil_mask_type",
+                            "semantic",
+                        ),
+                        mask_preview_png_base64=(
+                            _mask_preview_png_base64(
+                                face.mask,
+                                face.bbox_xyxy,
+                            )
                         ),
                     )
                 )
@@ -303,6 +524,15 @@ class ImageMaskingService:
                         y=y1,
                         width=max(1, x2 - x1),
                         height=max(1, y2 - y1),
+                    ),
+                    mask_type=getattr(
+                        face,
+                        "_dataveil_mask_type",
+                        "semantic",
+                    ),
+                    mask_preview_png_base64=_mask_preview_png_base64(
+                        face.mask,
+                        face.bbox_xyxy,
                     ),
                 )
             )
@@ -345,12 +575,17 @@ class ImageMaskingService:
         effect: str,
         strength: int,
         color: str,
+        face_scale: int = 100,
         confidence: float = DEFAULT_CONFIDENCE,
     ) -> ImageMaskResponse:
         if effect not in ALLOWED_EFFECTS:
             raise ImageProcessingError("The selected masking effect is invalid.")
         if not 1 <= strength <= 100:
             raise ImageProcessingError("Masking strength must be 1 to 100.")
+        if not 60 <= face_scale <= 140:
+            raise ImageProcessingError(
+                "Face circle size must be between 60 and 140 percent."
+            )
 
         image = decode_uploaded_image(
             data, filename=filename, content_type=content_type
@@ -361,6 +596,11 @@ class ImageMaskingService:
             if selected_region_ids is None
             else selected_region_ids
         )
+        face_region_ids = {
+            region.id
+            for region in bundle.response.regions
+            if region.kind == "face"
+        }
         masks: list[np.ndarray] = []
         for region_id in selected:
             mask = bundle.masks_by_id.get(region_id)
@@ -368,6 +608,8 @@ class ImageMaskingService:
                 raise ImageProcessingError(
                     "A selected image region is no longer available."
                 )
+            if region_id in face_region_ids:
+                mask = scale_binary_mask(mask, face_scale)
             if effect == "black":
                 rows, columns = np.where(mask > 0)
                 if rows.size and columns.size:

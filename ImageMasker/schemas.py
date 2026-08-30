@@ -25,6 +25,8 @@ class ImageRegion(StrictModel):
     kind: Literal["face", "body"]
     confidence: float = Field(ge=0.0, le=1.0)
     bbox: BoundingBox
+    mask_type: Literal["instance", "semantic", "fallback"] | None = None
+    mask_preview_png_base64: str | None = None
 
 
 class ImageDetectResponse(StrictModel):

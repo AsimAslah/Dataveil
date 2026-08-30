@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>DataVeil ImageMasker</title>
+  <link rel="stylesheet" href="{{ url_for('imagemasker_static', path='/dataveil-imagemasker-v3.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <nav class="workspace-nav">
+      <a href="/">← DataVeil home</a>
+      <span class="local-pill"><i></i>Local CPU processing</span>
+    </nav>
+
+    <header class="hero">
+      <p class="eyebrow">Image privacy workspace</p>
+      <h1>DataVeil <span>ImageMasker</span></h1>
+      <p>
+        Select faces, people, or your own regions. Tune the protection effect,
+        download a recovery kit, and restore private pixels after AI editing.
+      </p>
+    </header>
+
+    <section class="workflow-chooser" aria-labelledby="workflow-question">
+      <div class="workflow-chooser-heading">
+        <p class="eyebrow">Choose your path</p>
+        <h2 id="workflow-question">What image do you have right now?</h2>
+      </div>
+      <div class="workflow-tabs" role="tablist" aria-label="ImageMasker workflow">
+        <button
+          id="protect-tab"
+          class="workflow-tab active"
+          data-view="protect"
+          type="button"
+          role="tab"
+          aria-controls="protect-view"
+          aria-selected="true"
+        >
+          <span class="workflow-icon" aria-hidden="true">01</span>
+          <span class="workflow-copy">
+            <strong>Original image</strong>
+            <small>Protect private regions before you send it to GenAI.</small>
+          </span>
+          <span class="workflow-action">Protect before GenAI <b>→</b></span>
+        </button>
+        <button
+          id="restore-tab"
+          class="workflow-tab genai-tab"
+          data-view="restore"
+          type="button"
+          role="tab"
+          aria-controls="restore-view"
+          aria-selected="false"
+        >
+          <span class="workflow-icon" aria-hidden="true">02</span>
+          <span class="workflow-copy">
+            <strong>Image returned by GenAI</strong>
+            <small>Restore after AI: upload one image; recovery attaches automatically.</small>
+          </span>
+          <span class="workflow-action">Upload GenAI result <b>→</b></span>
+        </button>
+      </div>
+    </section>
+
+    <section id="protect-view" role="tabpanel" aria-labelledby="protect-tab">
+      <section class="panel upload-panel">
+        <div class="section-heading">
+          <div><span>01</span><h2>Upload an image</h2></div>
+          <small>PNG, JPG, or JPEG · up to 15 MB</small>
+        </div>
+        <label class="upload-zone" for="image-file">
+          <span class="upload-mark">↑</span>
+          <strong>Choose an image</strong>
+          <small>Your file is processed only on this computer.</small>
+          <input id="image-file" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg">
+        </label>
+        <div class="upload-footer">
+          <span id="image-name">No image selected</span>
+          <button id="detect-button" class="button primary" type="button">
+            <span class="button-label">Detect private regions</span>
+            <span class="spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+        <p id="detect-error" class="message error" role="alert" hidden></p>
+      </section>
+
+      <section id="mask-workspace" class="mask-workspace" hidden>
+        <div class="panel canvas-panel">
+          <div class="section-heading">
+            <div><span>02</span><h2>Choose regions</h2></div>
+            <small id="people-count">0 people</small>
+          </div>
+          <div id="canvas-wrap" class="canvas-wrap">
+            <canvas id="preview-canvas" aria-label="Image region preview"></canvas>
+          </div>
+          <div class="canvas-tools">
+            <button id="draw-region-button" class="tool-button" type="button">＋ Draw custom box</button>
+            <button id="clear-regions-button" class="tool-button" type="button">Clear custom boxes</button>
+            <span id="draw-hint">Drag on the image to cover anything detection missed.</span>
+          </div>
+        </div>
+
+        <aside class="control-stack">
+          <section class="panel regions-panel">
+            <div class="mini-heading">
+              <h3>Detected regions</h3>
+              <div>
+                <button id="select-all-button" type="button">All</button>
+                <button id="select-none-button" type="button">None</button>
+              </div>
+            </div>
+            <div id="region-list" class="region-list"></div>
+            <div id="face-fit-controls" class="face-fit-controls" hidden>
+              <div class="slider-heading face-fit-heading">
+                <label for="face-scale-range">Face circle size</label>
+                <output id="face-scale-output">100%</output>
+              </div>
+              <div class="face-size-adjuster">
+                <button id="shrink-face-button" type="button" aria-label="Shrink face circle">−</button>
+                <input
+                  id="face-scale-range"
+                  type="range"
+                  min="60"
+                  max="140"
+                  step="5"
+                  value="100"
+                  aria-describedby="face-fit-note"
+                >
+                <button id="expand-face-button" type="button" aria-label="Expand face circle">+</button>
+              </div>
+              <p id="face-fit-note">
+                Shrink if the circle goes beyond the face; expand to cover more hair or chin.
+              </p>
+            </div>
+          </section>
+
+          <section class="panel effect-panel">
+            <div class="section-heading compact-heading">
+              <div><span>03</span><h2>Protection style</h2></div>
+            </div>
+            <label class="field-label" for="effect-select">Masking type</label>
+            <select id="effect-select">
+              <option value="blur">Blur</option>
+              <option value="pixelate">Pixelate</option>
+              <option value="mosaic">Mosaic</option>
+              <option value="black">Black box</option>
+              <option value="solid">Custom solid color</option>
+              <option value="noise">Noise / scramble</option>
+              <option value="sticker">Privacy sticker</option>
+              <option value="silhouette">Full silhouette</option>
+            </select>
+
+            <div class="slider-heading">
+              <label id="strength-label" for="strength-range">Blur strength</label>
+              <output id="strength-output">65%</output>
+            </div>
+            <input id="strength-range" type="range" min="1" max="100" value="65">
+
+            <div id="color-field" class="color-field" hidden>
+              <label for="effect-color">Mask color</label>
+              <input id="effect-color" type="color" value="#101815">
+            </div>
+
+            <button id="mask-image-button" class="button primary full-button" type="button">
+              Protect selected regions
+            </button>
+            <p id="mask-error" class="message error" role="alert" hidden></p>
+          </section>
+        </aside>
+      </section>
+
+      <section id="image-result" class="panel result-panel" hidden>
+        <div class="section-heading">
+          <div><span>04</span><h2>Protected image</h2></div>
+          <small>Ready for your GenAI workflow</small>
+        </div>
+        <div class="result-preview">
+          <img id="masked-preview" alt="Protected result">
+        </div>
+        <div class="result-actions">
+          <button id="download-image-button" class="button secondary" type="button">Download masked PNG</button>
+        </div>
+        <div class="recovery-note">
+          <strong>Recovery data is ready automatically.</strong>
+          DataVeil keeps it temporarily in this browser tab and attaches it
+          when you return. Keep this tab open until restoration is finished.
+        </div>
+        <div class="ai-return-cta">
+          <div>
+            <strong>Finished editing with GenAI?</strong>
+            <span>Bring the generated image back here to recover your protected pixels.</span>
+          </div>
+          <button class="button return-button" data-switch-workflow="restore" type="button">
+            Upload GenAI result <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      </section>
+    </section>
+
+    <section id="restore-view" role="tabpanel" aria-labelledby="restore-tab" hidden>
+      <section class="restore-intro">
+        <p class="eyebrow">GenAI return lane</p>
+        <h2>Upload the image your GenAI model returned.</h2>
+        <p>
+          Upload only the generated or edited image. DataVeil automatically
+          uses the recovery data kept from the protection step, aligns the
+          images locally, and blends the protected pixels into the AI result.
+        </p>
+        <div class="return-recipe" aria-label="Restore workflow requirements">
+          <span><b>1</b> GenAI output image</span>
+          <i aria-hidden="true">+</i>
+          <span><b>2</b> Automatic recovery</span>
+          <i aria-hidden="true">→</i>
+          <span><b>3</b> Restored image</span>
+        </div>
+      </section>
+
+      <div class="restore-grid">
+        <section class="panel">
+          <div class="section-heading">
+            <div><span>01 · GenAI output</span><h2>Image from your AI model</h2></div>
+            <small>PNG, JPG, or JPEG · up to 15 MB</small>
+          </div>
+          <label class="upload-zone compact-upload" for="edited-image-file">
+            <span class="upload-mark">↑</span>
+            <strong>Upload GenAI image</strong>
+            <small>Restoration starts automatically after you choose the image.</small>
+            <input id="edited-image-file" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg">
+          </label>
+          <p id="edited-image-name" class="selected-name">No image selected</p>
+        </section>
+
+        <section class="panel auto-recovery-panel">
+          <div class="section-heading">
+            <div><span>02 · Automatic</span><h2>Recovery data</h2></div>
+            <small>No upload required</small>
+          </div>
+          <div id="automatic-recovery-status" class="automatic-recovery-status" data-state="missing">
+            <span class="recovery-status-mark" aria-hidden="true">·</span>
+            <div>
+              <strong id="automatic-recovery-title">Waiting for protected image</strong>
+              <p id="automatic-recovery-copy">
+                Protect the original image first. DataVeil will keep its
+                recovery data temporarily in this browser tab.
+              </p>
+            </div>
+          </div>
+          <button id="clear-automatic-recovery" class="tool-button clear-recovery" type="button" hidden>
+            Clear automatic recovery
+          </button>
+        </section>
+      </div>
+
+      <button id="restore-image-button" class="button primary restore-button" type="button">
+        Extract &amp; restore private pixels
+      </button>
+      <p id="restore-error" class="message error" role="alert" hidden></p>
+
+      <section id="restore-result" class="panel result-panel" hidden>
+        <div class="section-heading">
+          <div><span>03</span><h2>Restored result</h2></div>
+          <small id="alignment-status">Alignment complete</small>
+        </div>
+        <div class="result-preview">
+          <img id="restored-preview" alt="Restored result">
+        </div>
+        <div class="result-actions">
+          <button id="download-restored-button" class="button primary" type="button">Download restored PNG</button>
+        </div>
+      </section>
+
+      <p class="restore-limit">
+        Restoration handles resizing and modest layout changes. Heavy crops,
+        perspective changes, or complete scene regeneration may prevent
+        accurate alignment.
+      </p>
+    </section>
+
+    <footer>
+      No image history · No cloud APIs · Recovery data stays under your control
+    </footer>
+  </main>
+  <script src="{{ url_for('imagemasker_static', path='/dataveil-imagemasker-v3.js') }}" defer></script>
+</body>
+</html>

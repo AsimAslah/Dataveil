@@ -108,7 +108,7 @@ def _mask_response(payload: MaskRequest, service: MaskingService) -> MaskRespons
 async def docmasker_page(request: Request):
     return templates.TemplateResponse(
         request=request,
-        name="index.html",
+        name="index-v2.html",
         context={"max_text_length": 100_000},
     )
 
