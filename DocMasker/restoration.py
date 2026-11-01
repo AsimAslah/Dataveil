@@ -7,6 +7,8 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from .config import MAX_TEXT_LENGTH
+
 
 class InvalidRestorationMapping(ValueError):
     """Raised when a mapping cannot safely reconstruct the masked text."""
@@ -28,7 +30,10 @@ def _entry_values(entry: Any) -> Sequence[str]:
 
 
 def restore_text(
-    masked_text: str, placeholder_mapping: Mapping[str, Any]
+    masked_text: str,
+    placeholder_mapping: Mapping[str, Any],
+    *,
+    max_length: int = MAX_TEXT_LENGTH,
 ) -> str:
     """Restore placeholders in occurrence order without persisting the map."""
 
@@ -59,4 +64,9 @@ def restore_text(
         occurrence_indexes[placeholder] += 1
         return values[index]
 
-    return replacement_re.sub(replace, masked_text)
+    restored = replacement_re.sub(replace, masked_text)
+    if len(restored) > max_length:
+        raise InvalidRestorationMapping(
+            "The restored text exceeds the allowed size."
+        )
+    return restored

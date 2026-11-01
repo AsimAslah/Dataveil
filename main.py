@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from DocMasker.router import router as docmasker_router
 from ImageMasker.router import router as imagemasker_router
@@ -17,6 +18,92 @@ from ImageMasker.router import router as imagemasker_router
 PROJECT_ROOT = Path(__file__).resolve().parent
 MAX_REQUEST_BYTES = 64 * 1024 * 1024
 
+
+class RequestBodyTooLarge(Exception):
+    """Internal signal used before request data reaches an endpoint."""
+
+
+class RequestBodyLimitMiddleware:
+    """Enforce a byte limit even when Content-Length is absent or untrusted."""
+
+    def __init__(self, app: ASGIApp, max_body_size: int) -> None:
+        self.app = app
+        self.max_body_size = max_body_size
+
+    async def __call__(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        content_length = headers.get(b"content-length")
+        if content_length is not None:
+            try:
+                declared_size = int(content_length)
+            except ValueError:
+                await self._error(
+                    scope,
+                    receive,
+                    send,
+                    400,
+                    "The request metadata is invalid.",
+                )
+                return
+            if declared_size < 0:
+                await self._error(
+                    scope,
+                    receive,
+                    send,
+                    400,
+                    "The request metadata is invalid.",
+                )
+                return
+            if declared_size > self.max_body_size:
+                await self._error(
+                    scope, receive, send, 413, "The request is too large."
+                )
+                return
+
+        received = 0
+
+        async def limited_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_body_size:
+                    raise RequestBodyTooLarge
+            return message
+
+        try:
+            await self.app(scope, limited_receive, send)
+        except RequestBodyTooLarge:
+            await self._error(
+                scope, receive, send, 413, "The request is too large."
+            )
+
+    @staticmethod
+    async def _error(
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+        status_code: int,
+        detail: str,
+    ) -> None:
+        response = JSONResponse(
+            status_code=status_code,
+            content={"detail": detail},
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "Referrer-Policy": "no-referrer",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+        await response(scope, receive, send)
+
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "templates"))
 
 app = FastAPI(
@@ -24,6 +111,10 @@ app = FastAPI(
     version="1.0.0",
     docs_url=None,
     redoc_url=None,
+)
+app.add_middleware(
+    RequestBodyLimitMiddleware,
+    max_body_size=MAX_REQUEST_BYTES,
 )
 
 # Specific static mounts must be registered before the shared /static mount.
@@ -49,20 +140,6 @@ app.include_router(imagemasker_router)
 
 @app.middleware("http")
 async def privacy_headers(request: Request, call_next):
-    content_length = request.headers.get("content-length")
-    if content_length:
-        try:
-            if int(content_length) > MAX_REQUEST_BYTES:
-                return JSONResponse(
-                    status_code=413,
-                    content={"detail": "The request is too large."},
-                )
-        except ValueError:
-            return JSONResponse(
-                status_code=400,
-                content={"detail": "The request metadata is invalid."},
-            )
-
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
