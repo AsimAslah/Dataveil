@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from DocMasker.config import MAX_TEXT_LENGTH
+from DocMasker.config import (
+    MAX_OCCURRENCES_PER_PLACEHOLDER,
+    MAX_TEXT_LENGTH,
+)
 from DocMasker.detector import DetectionCandidate
 from DocMasker.router import get_masking_service
 from DocMasker.service import MaskingService
@@ -157,3 +160,47 @@ def test_oversized_input_returns_safe_error_without_text() -> None:
     assert response.status_code == 422
     assert private_value not in response.text
     assert "invalid or exceeds" in response.json()["detail"]
+
+
+def test_restore_rejects_unbounded_mapping_without_reflecting_values() -> None:
+    private_value = "SENSITIVE_VALUE"
+    with make_client() as client:
+        response = client.post(
+            "/api/doc/restore",
+            json={
+                "masked_text": "<PERSON_1>",
+                "placeholder_mapping": {
+                    "<PERSON_1>": {
+                        "entity_type": "PERSON",
+                        "original_values": [private_value]
+                        * (MAX_OCCURRENCES_PER_PLACEHOLDER + 1),
+                    }
+                },
+            },
+        )
+    clear_overrides()
+
+    assert response.status_code == 422
+    assert private_value not in response.text
+
+
+def test_restore_rejects_output_amplification() -> None:
+    with make_client() as client:
+        response = client.post(
+            "/api/doc/restore",
+            json={
+                "masked_text": "<PERSON_1>x",
+                "placeholder_mapping": {
+                    "<PERSON_1>": {
+                        "entity_type": "PERSON",
+                        "original_values": ["a" * MAX_TEXT_LENGTH],
+                    }
+                },
+            },
+        )
+    clear_overrides()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "The recovery mapping cannot restore this text."
+    )
